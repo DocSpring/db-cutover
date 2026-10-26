@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen --group dev
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run pytest
+      - run: uv build
+      - run: uv tool install dist/*.whl && uv tool run db-cutover --help
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.11'
+      - run: uv sync --frozen --group dev
+      - run: docker compose -p db-cutover-tests -f tests/integration/compose.yml up -d --wait
+      - run: uv run pytest tests/integration
+        env:
+          CUTOVER_TEST_BLUE_DSN: host=127.0.0.1 port=55432 dbname=cutover_test user=postgres password=synthetic-test-password
+          CUTOVER_TEST_GREEN_DSN: host=127.0.0.1 port=55433 dbname=cutover_test user=postgres password=synthetic-test-password
+      - if: always()
+        run: docker compose -p db-cutover-tests -f tests/integration/compose.yml down -v

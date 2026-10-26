@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Run state (schema dumps, cutover reports) when a config lives in this repo, e.g. while testing
+.db_cutover/
+
+# Local operational inputs and outputs; committed examples use synthetic values.
+/cutover.toml
+*.local.toml
+.env
+.env.*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.log
+*.pem
+*.key

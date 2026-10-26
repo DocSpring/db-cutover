@@ -1,0 +1,36 @@
+[project]
+name = "db-cutover"
+version = "0.2.0"
+description = "Agent-friendly tools for zero-downtime blue/green PostgreSQL cutovers on RDS with logical replication and a PgBouncer switch"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["psycopg[binary]>=3.2,<4"]
+
+[project.urls]
+Repository = "https://github.com/DocSpring/db-cutover"
+Documentation = "https://github.com/DocSpring/db-cutover/blob/main/docs/procedure.md"
+
+[project.scripts]
+db-cutover = "db_cutover.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/db_cutover"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

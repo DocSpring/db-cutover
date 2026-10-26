@@ -1,0 +1,91 @@
+# db-cutover config: one file per database you migrate. Every key, with its default when it has one.
+# Paths are relative to this file. Strings may use {placeholders} from [vars].
+
+name = "staging"            # labels output, and names the state directory
+database = "app"            # the database to migrate (the same name on BLUE and GREEN)
+admin_user = "postgres"     # owner of the schema; the tool connects as this user (rds_superuser on RDS)
+app_user = "app"            # the role the application connects as
+# state_dir = ".db_cutover/<name>"   # schema dumps and cutover reports; add it to .gitignore
+
+[vars]
+# A literal, or a value read from a JSON file ("key" may be a dotted path).
+env = "staging"
+rack = "example-staging-cluster"
+# rack = { json = "../cluster/vars.json", key = "name" }  # alternative to a literal
+
+[aws]
+region = "us-east-1"
+# profile = "staging"       # passed to the aws CLI; omit to use the environment
+
+# BLUE: the current primary. GREEN: the new instance. `identifier` is the RDS instance identifier, either literal or
+# read from a Terraform file, so the config stays right as files change. GREEN may not exist yet.
+[blue]
+identifier = "example-blue"
+# identifier = { terraform = "rds.tf", resource = "aws_db_instance.rds" }
+# host = "rds-{env}.example.test"   # how this machine reaches it; default: the RDS endpoint
+
+[green]
+identifier = "example-green"
+# identifier = { terraform = "rds_green.tf", resource = "aws_db_instance.rds_green" }
+# host = "rds-green-{env}.example.test"
+
+# Secrets: op://vault/item/field (1Password CLI), env:NAME, or cmd:<shell command>. Read once per run, never printed.
+[secrets]
+# op_account = "example.1password.com"
+admin_password = "env:CUTOVER_ADMIN_PASSWORD"
+app_password = "env:CUTOVER_APP_PASSWORD"
+pgbouncer_admin_password = "env:CUTOVER_PGBOUNCER_PASSWORD"
+# health_check_token = "env:CUTOVER_HEALTH_CHECK_TOKEN"  # X-Health-Check-Token for trusted health_urls
+# admin_password = "op://{env}/database/admin_password"  # alternative secret source
+
+# PgBouncer in Kubernetes. Its pgbouncer.ini comes from a ConfigMap mounted as a directory (not with subPath, or
+# changes never reach the pods). The tool talks to each pod's admin console through `kubectl port-forward`.
+[pgbouncer]
+kube_context = "{rack}"
+# namespace = "pgbouncer"
+# selector = "app=pgbouncer"
+# container = "pgbouncer"
+# config_path = "/etc/pgbouncer/pgbouncer.ini"
+# admin_user = "pgbouncer_admin"   # listed in admin_users
+# port = 5432
+host = "pgbouncer-{env}.example.test"   # PgBouncer as this machine reaches it, for `probe`
+
+# Anything that writes to BLUE without PgBouncer. PAUSE can't hold these, so the switch refuses to run while
+# they're connected: scale them down first, and point them at GREEN after.
+[direct_writers]
+# kube_context = "{rack}"          # default: [pgbouncer] kube_context
+deployments = ["app/worker-direct"]   # "namespace/name": checked for 0 replicas
+application_names = ["good_job"]      # substrings of application_name that identify their sessions
+
+[monitor]
+health_urls = ["https://app.example.com/health"]   # `watch` checks these every few seconds
+
+# [replication]
+# publication = "db_cutover_pub"
+# subscription = "db_cutover_sub"
+# slot = "db_cutover_slot"
+# probe_table = "db_cutover_probe"
+# binary = false        # text by default for cross-version portability; test before opting into binary
+
+# Column type changes: copy-schema applies them while GREEN's tables are empty, replication
+# converts the values (text format), and every schema check expects exactly these differences.
+# [schema]
+# column_types = { "public.audits.auditable_id" = "bigint" }
+
+# [sequences]
+# gap = 1000000         # GREEN's sequences start this far above BLUE's last value
+# min_margin = 100000   # move them again if BLUE gets within this of GREEN
+
+# Only for green-tf and promote-tf.
+[terraform]
+dir = "."
+blue_file = "rds.tf"              # holds BLUE's instance, parameter group and (optionally) app user module
+green_file = "rds_green.tf"       # green-tf writes this
+old_file = "rds_old.tf"           # promote-tf moves BLUE here
+instance = "rds"                  # aws_db_instance name in blue_file
+parameter_group = "rds"           # aws_db_parameter_group name in blue_file
+# app_user_module = "app_user"    # module creating the app role and grants (postgresql provider)
+# host_attribute = "host"         # that module's argument for the host it connects through
+# app_user_toggle = "enabled"     # a bool argument; green-tf sets it false until copy-schema has run
+green_identifier = "app-{env}-{timestamp}"
+# state_command = "terraform state"   # prefix of the state commands promote-tf prints
