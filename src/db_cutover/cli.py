@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import argparse
 import math
+import shutil
 import subprocess
 import sys
 import tomllib
 from collections.abc import Callable
+from pathlib import Path
 
 import psycopg
 
-from db_cutover import config
+from db_cutover import __version__, config
 from db_cutover.commands import blue, inspect, replication, switch, terraform
 from db_cutover.db import Context
 from db_cutover.output import StepFailed, error_detail
@@ -46,7 +48,10 @@ def parser() -> argparse.ArgumentParser:
         prog="db-cutover",
         description="Blue/green PostgreSQL cutover on RDS with logical replication and PgBouncer. Every command "
         "that changes something is a dry run without --execute.",
+        epilog="`db-cutover skill` prints where the packaged agent skill is, and `db-cutover skill --install DIR` "
+        "copies it into an agent's skills directory.",
     )
+    p.add_argument("--version", action="version", version=f"db-cutover {__version__}")
     p.add_argument("config", help="path to the cutover's TOML config")
     sub = p.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
@@ -158,7 +163,49 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+SKILL_NAME = "db-cutover"
+
+
+def skill_dir() -> Path:
+    """The agent skill: inside the installed package, or at the repository root in a source checkout."""
+    package = Path(__file__).resolve().parent
+    for candidate in (package / "skills" / SKILL_NAME, package.parents[1] / "skills" / SKILL_NAME):
+        if (candidate / "SKILL.md").is_file():
+            return candidate
+    raise FileNotFoundError(f"the {SKILL_NAME} skill is missing from this installation")
+
+
+def skill_command(argv: list[str]) -> None:
+    """`db-cutover skill`: takes no config, so it is parsed apart from the cutover commands."""
+    p = argparse.ArgumentParser(
+        prog="db-cutover skill",
+        description="The agent skill that teaches a coding agent to plan, rehearse and run a cutover with an "
+        "operator. Without options, prints the skill's directory.",
+    )
+    p.add_argument(
+        "--install", metavar="DIR", help="copy the skill to DIR/db-cutover (e.g. .claude/skills or .agents/skills)"
+    )
+    p.add_argument("--force", action="store_true", help="with --install: replace a db-cutover skill already there")
+    args = p.parse_args(argv)
+    source = skill_dir()
+    if not args.install:
+        print(source)
+        return
+    target = Path(args.install).expanduser() / SKILL_NAME
+    if target.exists():
+        if not args.force:
+            print(f"{target} already exists: pass --force to replace it", file=sys.stderr)
+            sys.exit(1)
+        shutil.rmtree(target)
+    shutil.copytree(source, target)
+    print(f"installed the {SKILL_NAME} skill (version {__version__}) to {target}")
+
+
 def main(argv: list[str] | None = None) -> None:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["skill"]:
+        skill_command(argv[1:])
+        return
     args = parser().parse_args(argv)
     try:
         ctx = Context(config.load(args.config))

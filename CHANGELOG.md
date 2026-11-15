@@ -1,7 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-16)
 
+The first release on PyPI.
+
+- Install with `uv tool install db-cutover` or `pipx install db-cutover`. `db-cutover --version` prints the version.
+- Add an agent skill (`skills/db-cutover`) for planning, rehearsing and running a cutover with an operator: each
+  command and its dry run, the stop points, the rehearsal checklist and recovery. It ships inside the package:
+  `db-cutover skill` prints its directory and `db-cutover skill --install DIR` copies it into an agent's skills
+  directory.
+- README: who the tool is for, a rehearsal walkthrough, and its guarantees and limits.
 - Stop and require recovery after a partial or unknown PgBouncer reload. Never resume mixed BLUE/GREEN targets.
   Report failed resumes and post-switch verification failures with unsuccessful exit status.
 - Require `--execute` for `probe`, `wait-sync`, and `pgbouncer resume`. `verify` is read-only by default;

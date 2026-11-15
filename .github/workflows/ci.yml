@@ -23,7 +23,8 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run pytest
       - run: uv build
-      - run: uv tool install dist/*.whl && uv tool run db-cutover --help
+      - run: uvx --from ./dist/*.whl db-cutover --help
+      - run: test -f "$(uvx --from ./dist/*.whl db-cutover skill)/SKILL.md"
 
   postgres-integration:
     runs-on: ubuntu-latest
