@@ -4,11 +4,30 @@ version = "0.2.0"
 description = "Agent-friendly tools for zero-downtime blue/green PostgreSQL cutovers on RDS with logical replication and a PgBouncer switch"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "DocSpring, Inc.", email = "support@docspring.com" }]
+keywords = ["postgresql", "rds", "pgbouncer", "logical-replication", "blue-green", "upgrade", "zero-downtime"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Database",
+  "Topic :: System :: Systems Administration",
+]
 dependencies = ["psycopg[binary]>=3.2,<4"]
 
 [project.urls]
 Repository = "https://github.com/DocSpring/db-cutover"
+Changelog = "https://github.com/DocSpring/db-cutover/blob/main/CHANGELOG.md"
+Issues = "https://github.com/DocSpring/db-cutover/issues"
 Documentation = "https://github.com/DocSpring/db-cutover/blob/main/docs/procedure.md"
 
 [project.scripts]
@@ -18,11 +37,19 @@ db-cutover = "db_cutover.cli:main"
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/db_cutover"]
+
+# The agent skill lives at the repository root, where `npx skills add DocSpring/db-cutover` finds it, and ships
+# inside the package, where `db-cutover skill` finds it.
+[tool.hatch.build.targets.wheel.force-include]
+"skills/db-cutover" = "db_cutover/skills/db-cutover"
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/skills", "/tests", "/docs", "/examples", "/CHANGELOG.md", "/SECURITY.md", "/AGENTS.md"]
 
 [tool.ruff]
 line-length = 120

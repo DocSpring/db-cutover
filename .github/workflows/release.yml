@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.11'
+      - name: Check the tag matches the package version
+        run: |
+          version="$(uv version --short)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match version $version" >&2
+            exit 1
+          fi
+      - run: uv sync --frozen --group dev
+      - run: uv run pytest
+      - run: uv build
+      - name: Check the built package installs and includes the skill
+        run: |
+          uvx --from ./dist/*.whl db-cutover --version
+          test -f "$(uvx --from ./dist/*.whl db-cutover skill)/SKILL.md"
+      - name: Write the release notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$1 == "##" { on = ($2 == v) ; next } on' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            dist/
+            release-notes.md
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/db-cutover/
+    permissions:
+      id-token: write # PyPI trusted publishing
+      contents: write # the GitHub release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+      - uses: astral-sh/setup-uv@v6
+      - run: uv publish --trusted-publishing always dist/*
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
